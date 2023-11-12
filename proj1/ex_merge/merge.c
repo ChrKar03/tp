@@ -18,6 +18,8 @@ void *mergeSort(void *arg);
 void merge(arg_t *ar1, arg_t *ar2);
 // Function to sort the small block of numbers in memory.
 void bubblesort(arg_t *ar);
+// Swaps the values of a & b.
+void swap(int *a, int *b);
 
 int main(int argc, char **argv)
 {
@@ -66,8 +68,8 @@ void *mergeSort(void *arg)
         pthread_t *t1 = (pthread_t*) malloc(sizeof(pthread_t));
         pthread_t *t2 = (pthread_t*) malloc(sizeof(pthread_t));
         
-        if (pthread_create(t1, NULL, mergeSort, p1) || pthread_create(t2, NULL, mergeSort, p2))
-            perror("SAKAI TRWS BEO");
+        pthread_create(t1, NULL, mergeSort, p1);
+        pthread_create(t2, NULL, mergeSort, p2);
 
         while (!(done1 && done2));
 
@@ -84,102 +86,44 @@ void *mergeSort(void *arg)
 
 void merge(arg_t *ar1, arg_t *ar2)
 {
-    // csr is the cursor for the "exchanged" values that are
-    // temporary stored in the old possition of the sorted numbers.
-    int i = 0, j = 0, csr = ar2->csr;
-    int *k = (int *) malloc(sizeof(int)), *int1 = (int *) malloc(sizeof(int)), 
-    *int2 = (int *) malloc(sizeof(int));
-    *k = 0;
+    // We will implement the gap method, so as the complexity of space is O(1).
+    int i, j, csr1, csr2, g = (ar1->size + ar2->size) / 2 + (ar1->size + ar2->size) % 2;
+    int *int1 = (int *) malloc(sizeof(int)), *int2 = (int *) malloc(sizeof(int));
 
-    while (i < ar1->size && j < ar2->size)
+    while (g)
     {
-        // Set possition of cursor to block of numbers assigned to thread.
-        fseek(ar1->fd, ar1->csr, SEEK_SET);
-        if (fread(int1, sizeof(int), 1, ar1->fd) == -1)
-            perror("SAKAI DIAVAZE");
-        fseek(ar2->fd, ar2->csr, SEEK_SET);
-        if (fread(int2, sizeof(int), 1, ar2->fd) == -1)
-            perror("SAKAI DIAVAZE 2");
-        // Intialization for first time.
-        if(!*k)
-            *k = *int2;
-        // Since no extra space, three pointers at file, int1 to the left side,
-        // int2 to right and k the pointer for the "exchanged" numbers possition.
-        if (*int1 > *int2 && *k >= *int2)
+        i = 0;
+        j = g;
+        csr1 = ar1->csr, csr2 = ar1->csr + 4 * j;
+        while (j < ar1->size + ar2->size)
         {
-            // Case where right element smaller than the left.
-            *int1 ^= *int2;
-            *int2 ^= *int1;
-            *int1 ^= *int2;
-            fseek(ar1->fd, ar1->csr, SEEK_SET);
-            if (fwrite(int1, sizeof(int), 1, ar1->fd) != 1)
-                perror("SAKAI GRAFE 1");
-            fseek(ar2->fd, ar2->csr, SEEK_SET);
-            if (fwrite(int2, sizeof(int), 1, ar2->fd) != 1)
-                perror("SAKAI GRAFE 2");
-            // Fist "exchanged" number.
-            if (*k == *int1)
-                *k = *int2;
+            // Set possition of cursors to block of numbers assigned to thread.
+            fseek(ar1->fd, csr1, SEEK_SET);
+            fread(int1, sizeof(int), 1, ar1->fd);
+            fseek(ar2->fd, csr2, SEEK_SET);
+            fread(int2, sizeof(int), 1, ar2->fd);
+            // Gap method for merging the two arrays.
+            if (i < ar1->size && j >= ar1->size && *int1 > *int2)
+                swap(int1, int2);
+            else if (i > ar1->size && *int1 > * int2)
+                swap(int1, int2);
+            else if (*int1 > *int2) 
+                swap(int1, int2);
+            // Store values to file.
+            fseek(ar1->fd, csr1, SEEK_SET);
+            fwrite(int1, sizeof(int), 1, ar1->fd);
+            fseek(ar2->fd, csr2, SEEK_SET);
+            fwrite(int2, sizeof(int), 1, ar2->fd);
+            csr1 += 4;
+            csr2 += 4;
             i++;
-            ar1->csr += 4;
             j++;
-            ar2->csr += 4;
         }
-        else if (*int1 < *int2 && *k < *int1)
-        {
-            // Case were "exchanged" value is smaller of all.
-            *int1 ^= *k;
-            *k ^= *int1;
-            *int1 ^= *k;
-            fseek(ar1->fd, ar1->csr, SEEK_SET);
-            if (fwrite(int1, sizeof(int), 1, ar1->fd) != 1)
-                perror("SAKAI GRAFE 3");
-            fseek(ar2->fd, csr, SEEK_SET);
-            if (fwrite(k, sizeof(int), 1, ar2->fd) != 1)
-                perror("SAKAI GRAFE 4");
-            i++;
-            ar1->csr += 4;
-        }
-        else
-        {
-            // Case where left element is the smallest.
-            i++;
-            ar1->csr += 4;
-        }
+        if (g == 1)
+            break;
+        g = g / 2 + g % 2;
     }
-
-    // Calculating possition of array cursor and array2 j index.
-    j = ((csr - (ar2->csr - j * 4)) / 4) + 1;
-    ar2->csr = csr + j * 4;
-
-    // Sort the remain "exchanged" numbers that are all located in array2. 
-    while (*k  && j < ar2->size)
-    {
-        fseek(ar2->fd, csr, SEEK_SET);
-        if (fread(k, sizeof(int), 1, ar1->fd) == -1)
-            perror("SAKAI DIAVAZE 3");
-        fseek(ar2->fd, ar2->csr, SEEK_SET);
-        if (fread(int2, sizeof(int), 1, ar2->fd) == -1)
-            perror("SAKAI DIAVAZE 4");
-        if (*k > *int2)
-        {
-            *k ^= *int2;
-            *int2 ^= *k;
-            *k ^= *int2;
-            fseek(ar1->fd, csr, SEEK_SET);
-            if (fwrite(k, sizeof(int), 1, ar1->fd) != 1)
-                perror("SAKAI GRAFE 5");
-            fseek(ar2->fd, ar2->csr, SEEK_SET);
-            if (fwrite(int2, sizeof(int), 1, ar2->fd) != 1)
-                perror("SAKAI GRAFE 6");
-        }
-        csr += 4;
-        j++;
-        ar2->csr += 4;
-    }
-
     free(int1);
-    free(k);
     free(int2);
 }
 
@@ -189,8 +133,7 @@ void bubblesort(arg_t *ar)
     int *int_buf = (int *) malloc(sizeof(int) * ar->size);
     // Set cursor to possition, read all chunk, sort and return.
     fseek(ar->fd, ar->csr, SEEK_SET);
-    if (fread(int_buf, sizeof(int), ar->size, ar->fd) == -1)
-        perror("SAKAI 2 THELEI SPERMA");
+    fread(int_buf, sizeof(int), ar->size, ar->fd);
     fseek(ar->fd, ar->csr, SEEK_SET);
     while (swap)
     {
@@ -206,8 +149,13 @@ void bubblesort(arg_t *ar)
             }
         }
     }
-    if (fwrite(int_buf, sizeof(int), ar->size, ar->fd) != ar->size)
-        perror("SAKAI STAMATA NA TON TRWS");
-
+    fwrite(int_buf, sizeof(int), ar->size, ar->fd);
     free(int_buf);
+}
+
+void swap(int *a, int *b)
+{
+    *a ^= *b;
+    *b ^= *a;
+    *a ^= *b;
 }
