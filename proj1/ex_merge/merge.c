@@ -12,6 +12,9 @@ typedef struct
     int csr;    // Cursor position.
 } arg_t;
 
+// Global filename.
+char *file_name;
+
 // Thread function to initialize and decide actions.
 void *mergeSort(void *arg);
 // Function that merges the two "arrays".
@@ -26,7 +29,8 @@ int main(int argc, char **argv)
     // Initialization.
     int done = 0;
     arg_t arg = {.done = &done};
-    arg.fd = fopen(argv[1], "r+b");
+    file_name = argv[1];
+    arg.fd = fopen(file_name, "r+b");
     // File size and # of ints.
     fseek(arg.fd, 0, SEEK_END);
     arg.size = ftell(arg.fd) / 4;
@@ -56,8 +60,8 @@ void *mergeSort(void *arg)
         // Check variables.
         int done1 = 0;
         int done2 = 0;
-        arg_t temp1 = {.fd = tmp->fd, .size = tmp->size/2, .done = &done1, .csr = tmp->csr};
-        arg_t temp2 = {.fd = tmp->fd, .size = tmp->size/2, .done = &done2, .csr = tmp->csr + (tmp->size/2) * 4};
+        arg_t temp1 = {.fd = fopen(file_name, "r+b"), .size = tmp->size/2, .done = &done1, .csr = tmp->csr};
+        arg_t temp2 = {.fd = fopen(file_name, "r+b"), .size = tmp->size/2, .done = &done2, .csr = tmp->csr + (tmp->size/2) * 4};
 
         if (tmp->size % 2)
             temp2.size += 1;
@@ -75,7 +79,9 @@ void *mergeSort(void *arg)
 
         free(t1);
         free(t2);
+        fclose(temp2.fd);
         merge(&temp1, &temp2);
+        fclose(temp1.fd);
     }
     else
         bubblesort(tmp);
@@ -100,20 +106,22 @@ void merge(arg_t *ar1, arg_t *ar2)
             // Set possition of cursors to block of numbers assigned to thread.
             fseek(ar1->fd, csr1, SEEK_SET);
             fread(int1, sizeof(int), 1, ar1->fd);
-            fseek(ar2->fd, csr2, SEEK_SET);
-            fread(int2, sizeof(int), 1, ar2->fd);
+            fseek(ar1->fd, csr2, SEEK_SET);
+            fread(int2, sizeof(int), 1, ar1->fd);
             // Gap method for merging the two arrays.
             if (i < ar1->size && j >= ar1->size && *int1 > *int2)
                 swap(int1, int2);
             else if (i > ar1->size && *int1 > * int2)
                 swap(int1, int2);
-            else if (*int1 > *int2) 
+            else if (*int1 > *int2)
                 swap(int1, int2);
+            // Need some delay.
+            printf("a");
             // Store values to file.
             fseek(ar1->fd, csr1, SEEK_SET);
             fwrite(int1, sizeof(int), 1, ar1->fd);
-            fseek(ar2->fd, csr2, SEEK_SET);
-            fwrite(int2, sizeof(int), 1, ar2->fd);
+            fseek(ar1->fd, csr2, SEEK_SET);
+            fwrite(int2, sizeof(int), 1, ar1->fd);
             csr1 += 4;
             csr2 += 4;
             i++;
